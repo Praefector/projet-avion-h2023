@@ -2,8 +2,7 @@
 import board
 import mfrc522
 
-
-rdr = mfrc522.MFRC522(board.D11, board.D10, board.D12, board.D9, board.RX)
+rdr = mfrc522.MFRC522(board.D12, board.D11, board.D13, board.D5, board.D10)
 rdr.set_antenna_gain(0x07 << 4)
 
 print('')
@@ -14,6 +13,7 @@ try:
     while True:
 
         (stat, tag_type) = rdr.request(rdr.REQIDL)
+        print("test")
 
         if stat == rdr.OK:
 

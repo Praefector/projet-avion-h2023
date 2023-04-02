@@ -6,7 +6,7 @@ import terminalio
 from adafruit_display_text import bitmap_label
 from displayio import Group
 
-sonar = adafruit_hcsr04.HCSR04(trigger_pin=board.D6, echo_pin=board.D5)
+sonar = adafruit_hcsr04.HCSR04(trigger_pin=board.D9, echo_pin=board.D6)
 pixelLed = neopixel.NeoPixel(board.NEOPIXEL, 1)
 pixelLed.brightness = 1
 
