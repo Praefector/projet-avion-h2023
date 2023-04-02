@@ -3,11 +3,11 @@ import pwmio
 import time
 from adafruit_motor import servo
 
-pwm = pwmio.PWMOut(board.A0, duty_cycle=2 ** 15, frequency=50)
-patte_servo = servo.Servo(pwm)
+pwm = pwmio.PWMOut(board.RX, duty_cycle=2 ** 15, frequency=50)
+servoMotor = servo.Servo(pwm, min_pulse=500, max_pulse=2300)   
 
 while True:
     userInput = int(input("Entrez un angle entre 0 et 180 degrées : "))
 
     if userInput <= 180 and userInput >= 0 and userInput != "":
-        patte_servo.angle = userInput
+        servoMotor.angle = userInput

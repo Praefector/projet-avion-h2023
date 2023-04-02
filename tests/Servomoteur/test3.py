@@ -4,10 +4,10 @@ import analogio
 import time
 from adafruit_motor import servo
 
-pwm = pwmio.PWMOut(board.A0, duty_cycle=2 ** 15, frequency=50)
-patte_servo = servo.Servo(pwm)
-pinD6 = analogio.AnalogIn(board.D13)
+pwm = pwmio.PWMOut(board.RX, duty_cycle=2 ** 15, frequency=50)
+servoMotor = servo.Servo(pwm, min_pulse=500, max_pulse=2300)   
+pot = analogio.AnalogIn(board.A3)
 
 while True:
-    val = pinD6.value * 180 / 52288
-    patte_servo.angle = val
+    val = pot.value * 180 / 52288
+    servoMotor.angle = val

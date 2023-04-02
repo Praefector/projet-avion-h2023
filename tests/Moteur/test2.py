@@ -8,14 +8,15 @@ from adafruit_motor import motor
 from adafruit_display_text import bitmap_label
 from displayio import Group
 
-pwmPos = pwmio.PWMOut(board.D12, duty_cycle=2 ** 15, frequency=50)
-pwnNeg = pwmio.PWMOut(board.D13, duty_cycle=2 ** 15, frequency=50)
+pwmPos = pwmio.PWMOut(board.A1, duty_cycle=2 ** 15, frequency=50)
+pwnNeg = pwmio.PWMOut(board.A2, duty_cycle=2 ** 15, frequency=50)
 
-pinD11 = digitalio.DigitalInOut(board.D11)
-pinD11.direction = digitalio.Direction.OUTPUT
-pinD11.value = True
+pinA0 = digitalio.DigitalInOut(board.A0)
+pinA0.direction = digitalio.Direction.OUTPUT
 
-pinA0 = analogio.AnalogIn(board.A0)
+pinA0.value = True
+
+pinA4 = analogio.AnalogIn(board.A4)
 
 motor = motor.DCMotor(pwmPos, pwnNeg)
 
@@ -31,10 +32,13 @@ board.DISPLAY.show(textGroup)
 temps = time.monotonic()
 
 while True:
-    val = pinA0.value * 200.00 / 52288
+    val = pinA4.value * 200.00 / 52288
     trueVal = (val * 2.00 / 200.00) - 1.00
+    if(trueVal < 0.6 and trueVal > -0.1):
+        trueVal = 0
+
     motor.throttle = trueVal
 
     if (temps + 0.2) < time.monotonic() :
-        textArea.text = "Puissance : " + trueVal
+        textArea.text = "Puissance : " + str(trueVal) + '\n' + "Val : " + str(pinA4.value) + '\n' + "Val(200) : " + str(val)
         temps = time.monotonic()
