@@ -7,8 +7,8 @@ from math import degrees
 from adafruit_display_text import bitmap_label
 from displayio import Group
 
-axisX = analogio.AnalogIn(board.A3)
-axisY = analogio.AnalogIn(board.A4)
+axisX = analogio.AnalogIn(board.A0)
+axisY = analogio.AnalogIn(board.A1)
 
 maxPot = 52388
 midPot = 52388/2

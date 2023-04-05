@@ -4,13 +4,13 @@ import time
 import digitalio
 from adafruit_motor import motor
 
-pwmPos = pwmio.PWMOut(board.A1, duty_cycle=2 ** 15, frequency=50)
-pwnNeg = pwmio.PWMOut(board.A2, duty_cycle=2 ** 15, frequency=50)
+pwmPos = pwmio.PWMOut(board.A5, duty_cycle=2 ** 15, frequency=50)
+pwnNeg = pwmio.PWMOut(board.SCK, duty_cycle=2 ** 15, frequency=50)
 
-pinA0 = digitalio.DigitalInOut(board.A0)
-pinA0.direction = digitalio.Direction.OUTPUT
+enable = board.A4
+enable.direction = digitalio.Direction.OUTPUT
 
-pinA0.value = True
+enable.value = True
 
 motor = motor.DCMotor(pwmPos, pwnNeg)
 temps = time.monotonic()
