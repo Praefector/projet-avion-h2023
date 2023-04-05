@@ -1,8 +1,9 @@
 
 import board
 import mfrc522
+import digitalio
 
-rdr = mfrc522.MFRC522(board.D13, board.D11, board.D12, board.D5, board.D10)
+rdr = mfrc522.MFRC522(board.D12, board.D11, board.D13, board.D5, board.D10)
 rdr.set_antenna_gain(0x07 << 4)
 
 print('')

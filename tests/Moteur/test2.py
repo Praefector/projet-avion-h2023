@@ -8,10 +8,10 @@ from adafruit_motor import motor
 from adafruit_display_text import bitmap_label
 from displayio import Group
 
-pwmPos = pwmio.PWMOut(board.A5, duty_cycle=2 ** 15, frequency=50)
-pwnNeg = pwmio.PWMOut(board.SCK, duty_cycle=2 ** 15, frequency=50)
+pwmPos = pwmio.PWMOut(board.A4, duty_cycle=2 ** 15, frequency=50)
+pwnNeg = pwmio.PWMOut(board.A5, duty_cycle=2 ** 15, frequency=50)
 
-enable = board.A4
+enable = digitalio.DigitalInOut(board.A3)
 enable.direction = digitalio.Direction.OUTPUT
 
 enable.value = True
