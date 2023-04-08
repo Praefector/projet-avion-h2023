@@ -1,19 +1,34 @@
 import board
-import keypad
 import pwmio
 import time
 import neopixel
+import mfrc522
 import adafruit_hcsr04
 import adafruit_dht
-import terminalio
+import terminalio0
 import analogio
 import digitalio
 from adafruit_motor import servo
-from adafruit_hid.keycode import Keycode
+from adafruit_motor import motor
 from adafruit_display_text import bitmap_label
 from displayio import Group
 
-#Screen
+######## STARTING STATE #########
+
+### Time ###
+
+passedTime = time.monotonic()
+
+### Joystick ###
+
+joystickAxisX = analogio.AnalogIn(board.A0)
+joystickAxisY = analogio.AnalogIn(board.A1)
+
+MAX_JOYSTICK_VAL = 52388
+MID_JOYSTICK_VAL = 52388/2
+MIN_JOYSTICK_VAL = 595
+
+### Screen ###
 scale = 2
 textArea = bitmap_label.Label(terminalio.FONT, scale = scale)
 textArea.anchor_point = (0.5, 0.5)
@@ -22,20 +37,49 @@ textGroup = Group()
 textGroup.append(textArea)
 board.DISPLAY.show(textGroup)
 
-#DHT
+### DHT ###
 dht = adafruit_dht.DHT11(board.TX)
 
-#Servomotor
-pwm = pwmio.PWMOut(board.RX, duty_cycle=2 ** 15, frequency=50)
-servoMotor = servo.Servo(pwm, min_pulse=500, max_pulse=2300)
+### Servomotor ###
+aileronPWM = pwmio.PWMOut(board.RX, duty_cycle=2 ** 15, frequency=50)
+aileron = servo.Servo(aileronPWM, min_pulse=500, max_pulse=2300)
 
-#Sonar
+### Motor ###
+motorPWMPositive = pwmio.PWMOut(board.A4, duty_cycle=2 ** 15, frequency=50)
+motorPWMNegative = pwmio.PWMOut(board.A5, duty_cycle=2 ** 15, frequency=50)
+
+enableMotor = digitalio.DigitalInOut(board.A3)
+enableMotor.direction = digitalio.Direction.OUTPUT
+enableMotor.value = False
+
+motor = motor.DCMotor(motorPWMPositive, motorPWMNegative)
+motor.throttle = 0
+
+### Sonar ###
 distanceSonar = adafruit_hcsr04.HCSR04(trigger_pin=board.D9, echo_pin=board.D6)
 
-#PixelLed Module
+### PixelLed Module ###
 pixelLed = neopixel.NeoPixel(board.NEOPIXEL, 1)
 pixelLed.brightness = 1
-colors = {'rouge':(255, 0, 0), 'jaune':(255, 255, 0), 'vert':(0, 255, 0)}
+COLORS = {'rouge':(255, 0, 0), 'jaune':(255, 255, 0), 'vert':(0, 255, 0)}
+
+### AIRPORTS CODES ###
+
+airports = {
+    101 : "YUL Montreal",
+    111 :  "ATL Atlanta",
+    222 : "HND Tokyo",
+    764 : "LHR London",
+    492 : "CAN Baiyun",
+    174 : "CDG Paris",
+    523 : "AMS Amsterdam"
+}
+
+### RFID CODES ###
+
+rfid = {
+    
+}
 
 def starting_state():
 
