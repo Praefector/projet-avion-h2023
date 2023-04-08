@@ -11,3 +11,5 @@ pot = analogio.AnalogIn(board.A0)
 while True:
     val = pot.value * 180 / 52288
     servoMotor.angle = val
+
+    print(pot.value)
