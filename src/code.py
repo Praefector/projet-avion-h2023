@@ -1,6 +1,11 @@
 import board
 import pwmio
 import time
+import wifi
+import ssl
+import socketpool
+import adafruit_requests
+import os
 import neopixel
 import mfrc522
 import adafruit_hcsr04
@@ -15,6 +20,7 @@ from math import degrees
 from adafruit_motor import servo
 from adafruit_motor import motor
 from adafruit_display_text import bitmap_label
+from adafruit_tca8418 import TCA8418
 from displayio import Group
 
 ######## STARTING STATE #########
@@ -23,16 +29,12 @@ from displayio import Group
 
 i2c = busio.I2C(board.SCL, board.SDA)  # uses board.SCL and board.SDA
 aw9523 = adafruit_aw9523.AW9523(i2c)
+#tca = TCA8418(i2c)
 
 ### General attributes ###
-tempCelcius = 0
-humidity = 0
 currentDestination = ""
-motorPower = 0
-finAngle = 0
-isFlightSettingsLocked = False
 
-### Finals
+### Finals ###
 MAX_8BIT = 255
 MIN_8BIT = 0
 
@@ -44,6 +46,41 @@ MAX_DEGREES = 360
 
 COLORS = {'red':(255, 0, 0), 'yellow':(255, 255, 0), 'green':(0, 255, 0), 'white':(255, 255, 255), 'off':(0, 0, 0)}
 ANGLE_RANGE = (0, 45, 90 , 135, 180, 225, 270, 315, 360)
+
+KEYPAD = ((1, 2, 3, "A"),
+            (4, 5, 6, "B"),
+            (7, 8, 9, "C"),
+            ('*', 0, '#', "D"))
+
+AIRPORTS = {
+    "101" : "YUL Montreal",
+    "111" : "ATL Atlanta",
+    "222" : "HND Tokyo",
+    "764" : "LHR London",
+    "492" : "CAN Baiyun",
+    "174" : "CDG Paris",
+    "523" : "AMS Amsterdam"
+}
+
+### Keypad ###
+PINS_TCA = (
+    TCA8418.R0,
+    TCA8418.R1,
+    TCA8418.R2,
+    TCA8418.R3,
+    TCA8418.C0,
+    TCA8418.C1,
+    TCA8418.C2,
+    TCA8418.C3,
+)
+"""
+for pin in PINS_TCA:
+    tca.keypad_mode[pin] = True
+    tca.enable_int[pin] = True
+    tca.event_mode_fifo[pin] = True
+
+tca.key_intenable = True
+"""
 
 ### Time ###
 passedTime = time.monotonic()
@@ -100,76 +137,132 @@ pixelLed.brightness = 1
 pwrButton = aw9523.get_pin(0)
 pwrButton.direction = digitalio.Direction.INPUT
 
-### AIRPORTS CODES ###
-
-airports = {
-    101 : "YUL Montreal",
-    111 :  "ATL Atlanta",
-    222 : "HND Tokyo",
-    764 : "LHR London",
-    492 : "CAN Baiyun",
-    174 : "CDG Paris",
-    523 : "AMS Amsterdam"
-}
+### RFID ###
+rfidModule = mfrc522.MFRC522(board.D12, board.D11, board.D13, board.D5, board.D10)
+rfidModule.set_antenna_gain(0x07 << 4)
 
 ### RFID CODES ###
+rfidUid = [
+    320
+]
 
-rfid = {
-    
-}
-
-def starting_state():
-    return state_3()
-
-    #RFID
-
-    #FAIRE LE CHECK LORSQUE RFID FONCTIONNEL
-    #while True:
-     #   if evenement_externe_1():
-     #       # Transition vers l'état 1
-     #       return etat_1()
-     #   
-     #   elif evenement_externe_2():
-     #       # Transition vers l'état 2
-     #       return etat_2()
-      #  else:
-
-      #      # Attente d'un événement externe
-      #      attendre_evenement()
-
+### WIFI ###
+wifi.radio.connect(os.getenv("CIRCUITPY_WIFI_SSID"), os.getenv("CIRCUITPY_WIFI_PASSWORD"))
+socket = socketpool.SocketPool(wifi.radio)
+context = ssl.create_default_context()
+https = adafruit_requests.Session(socket,context)
 
 def state_1():
     pixelLed.fill(COLORS['red'])
-    enableMotor.value = False
+    textArea.scale = 2
     #position attente
+    enableMotor.value = False
     fin.angle = 90
 
     textArea.text = "Scannez carte"
 
-    # Actions à effectuer lors de l'entrée dans l'état 1
-    while True:
-        if evenement_externe_3():
-            # Transition vers l'état final
-            return etat_final()
-        else:
-            # Attente d'un événement externe
-            attendre_evenement()
+    cardUid = ""
+
+    #RFID
+    while not cardUid in rfidUid:
+        (stat, tag_type) = rfidModule.request(rfidModule.REQIDL)
+            
+        if stat == rfidModule.OK:
+            (stat, raw_uid) = rfidModule.anticoll()
+            cardUid = raw_uid[0] + raw_uid[1] + raw_uid[2] + raw_uid[3]
+            print("  - uid\t : 0x%02x%02x%02x%02x" % (raw_uid[0], raw_uid[1], raw_uid[2], raw_uid[3]))
+            print('')
+            print(cardUid)
+
+    return state_2()
+
+
 
 def state_2():
     pixelLed.fill(COLORS['yellow'])
-    textArea.text = "Afficher sur LCD : \n Entrez code destination sur ligne 1"
+    textArea.scale = 2
+    textArea.text =  "Entrez code\ndestination"
+    keypadString = ""
+    lcdPassedTime = time.monotonic()
+    global currentDestination
+
+    while currentDestination == "":
+        if lcdPassedTime + 0.1 < time.monotonic():
+            textArea.text =  "Entrez code\ndestination \n" + keypadString
+            lcdPassedTime = time.monotonic()
+        
+        ### DEBUG ### PERMET DE SIMULER UN CLAVIER
+
+        charInput = input()
+
+        if charInput == "#" and len(keypadString) == 3:
+            if keypadString in AIRPORTS :
+                currentDestination = AIRPORTS[keypadString]
+            else :
+                textArea.text = "Veuillez entrer\nun code valide !"
+                keypadString = ""
+                charInput = ""
+                time.sleep(2)
+
+        elif charInput == "#" and len(keypadString) == 0:
+            return state_1()
+
+        elif charInput == "#" and len(keypadString) != 3:
+            textArea.text = "Veuillez entrer\nun code valide !"
+            charInput = ""
+            time.sleep(2)
+
+        elif len(keypadString) >= 3:
+            textArea.text = "Veuillez entrer\nun code valide\nde 3 caractères !"
+            keypadString = ""
+            charInput = ""
+            time.sleep(2)
+
+        keypadString += charInput
+
+        """
+        if tca.key_int:
+            events = tca.events_count
+
+            for _ in range(events):
+                keyevent = tca.next_event
+                #  strip keyevent
+                event = keyevent & 0x7F
+                event -= 1
+                row = event // 16
+                col = event % 16
+
+
+                if KEYPAD[col][row] == "#" and len(keypadString) == 3:
+                    if keypadString in AIRPORTS :
+                        currentDestination = AIRPORTS[keypadString]
+
+                elif KEYPAD[col][row] == "#" and len(keypadString) == 0:
+                    return state_1()
+
+                elif KEYPAD[col][row] == "#" and len(keypadString) != 3:
+                    textArea.text = "Veuillez entrer un code valide !"
+                    time.sleep(2)
+
+                elif len(keypadString) > 3:
+                    textArea.text = "Veuillez entrer un code \n valide de 3 caractères !"
+                    keypadString = ""
+                    time.sleep(2)
+                    
+                keypadString += KEYPAD[col][row]
+            tca.key_int = True  
+        """
+    textArea.text =  currentDestination + "\nAttend PWR ON"
 
     while True:
-        if evenement_externe_4():
-            # Transition vers l'état final
-            return etat_final()
-        else:
-            # Attente d'un événement externe
-            attendre_evenement()
+        
+        if pwrButton.value :
+            return state_3()
 
 def state_3():
 
     #Empêche le plantage vu non déclaré ???
+    textArea.scale = 1
     enableMotor.value = True
     pixelLed.fill(COLORS['green'])
     isFlightSettingsLocked = False
@@ -178,21 +271,17 @@ def state_3():
     tempCelcius = 0
     humidity = 0
     lcdPassedTime = time.monotonic()
+    passedTime = time.monotonic()
     ledIndex = 0
+    global currentDestination
 
-    ## debug
-    currentDestination = "YSC Sherbrooke"
-
-    while pwrButton :
+    while pwrButton.value :
 
         if not joystickButton.value :
-            print("enetring joystick if statement")
             if isFlightSettingsLocked :
                 isFlightSettingsLocked = False
-                print("isFlight set to False")
             else :
                 isFlightSettingsLocked = True
-                print("isFlight set to True")
 
         if not isFlightSettingsLocked :
             ## motor
@@ -264,6 +353,9 @@ def state_3():
             humidity = dht.humidity
             motorPower = motor.throttle * 100
 
+
+        
+
         except RuntimeError as error:
             print(error.args[0])
             continue
@@ -272,19 +364,23 @@ def state_3():
             textArea.text = "Puissance moteur : " + str(int(motorPower)) + " %\n" + "Angle aileron : " + str(int(finAngle)) + " deg\n" + "Destination : " + str(currentDestination) + "\n" + "Température : " + str(tempCelcius) + " C\n" + "Humidité : " + str(humidity) + " %\n" + "Autopilote : " + str(isFlightSettingsLocked)
             lcdPassedTime = time.monotonic()
 
+        if passedTime + 5 < time.monotonic():
+            ## send data to api
+            json_data = {
+                "field1": tempCelcius,
+                "field2": humidity,
+            }
+            response = https.post(os.getenv("APIPOST"), json = json_data)
+            passedTime = time.monotonic()
+
+
 
     return state_1()
 
 def main():
-    
-    # Initialisation de la machine à états finis
-    #current_state = starting_state()
 
     while True:
-        # Exécution de l'état courant
-        #current_state = starting_state()
-
-        current_state = state_3()
+        current_state = state_1()
 
         # Sortie de la boucle si l'état final est atteint
         if current_state == None:
