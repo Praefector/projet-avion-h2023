@@ -120,7 +120,7 @@ motor = motor.DCMotor(motorPWMPositive, motorPWMNegative)
 motor.throttle = 0
 
 ### Sonar ###
-distanceSonar = adafruit_hcsr04.HCSR04(trigger_pin=board.D9, echo_pin=board.D6)
+#distanceSonar = adafruit_hcsr04.HCSR04(trigger_pin=board.D9, echo_pin=board.D6)
 
 ### PixelLed Module ###
 pixelLed = neopixel.NeoPixel(board.NEOPIXEL, 1)
@@ -128,9 +128,9 @@ pixelLed.brightness = 1
 
 ### LED Ring
 
-#ledBoard = neopixel.NeoPixel(PIN PIN PIN, 8)
-#ledBoard.brightness = 0.1
-#ledBoard.fill(COLORS['off'])
+ledBoard = neopixel.NeoPixel(board.D6, 8)
+ledBoard.brightness = 0.1
+ledBoard.fill(COLORS['off'])
 
 
 ### PWR Button ###
@@ -147,10 +147,50 @@ rfidUid = [
 ]
 
 ### WIFI ###
+
 wifi.radio.connect(os.getenv("CIRCUITPY_WIFI_SSID"), os.getenv("CIRCUITPY_WIFI_PASSWORD"))
 socket = socketpool.SocketPool(wifi.radio)
 context = ssl.create_default_context()
 https = adafruit_requests.Session(socket,context)
+
+
+### FUNCTIONS ####
+
+def selectLedRingIndex(joystickAngle):
+    if joystickAngle == -1:
+        ledIndex = -1
+    elif joystickAngle > ANGLE_RANGE[0] and joystickAngle < ANGLE_RANGE[1]:
+        ledIndex = 0
+    elif joystickAngle < ANGLE_RANGE[2]:
+        ledIndex = 1
+    elif joystickAngle < ANGLE_RANGE[3]:
+        ledIndex = 2
+    elif joystickAngle < ANGLE_RANGE[4]:
+        ledIndex = 3
+    elif joystickAngle < ANGLE_RANGE[5]:
+        ledIndex = 4
+    elif joystickAngle < ANGLE_RANGE[6]:
+        ledIndex = 5
+    elif joystickAngle < ANGLE_RANGE[7]:
+        ledIndex = 6
+    else :
+        ledIndex = 7
+
+    return ledIndex
+
+def sendData(tC, hum):
+    json_data = {
+        "field1": tC,
+        "field2": hum,
+    }
+    response = https.post(os.getenv("APIPOST"), json = json_data)
+
+def defineTempHum():
+
+    tempC = dht.temperature
+    hum = dht.humidity
+    sendData(tempC, hum)
+
 
 def state_1():
     pixelLed.fill(COLORS['red'])
@@ -158,10 +198,9 @@ def state_1():
     #position attente
     enableMotor.value = False
     fin.angle = 90
-
     textArea.text = "Scannez carte"
-
     cardUid = ""
+    passedTime = time.monotonic()
 
     #RFID
     while not cardUid in rfidUid:
@@ -170,9 +209,15 @@ def state_1():
         if stat == rfidModule.OK:
             (stat, raw_uid) = rfidModule.anticoll()
             cardUid = raw_uid[0] + raw_uid[1] + raw_uid[2] + raw_uid[3]
+            """ DEBUG
             print("  - uid\t : 0x%02x%02x%02x%02x" % (raw_uid[0], raw_uid[1], raw_uid[2], raw_uid[3]))
             print('')
             print(cardUid)
+            """
+
+        if passedTime + 5 < time.monotonic():
+            defineTempHum()
+            passedTime = time.monotonic()
 
     return state_2()
 
@@ -184,6 +229,7 @@ def state_2():
     textArea.text =  "Entrez code\ndestination"
     keypadString = ""
     lcdPassedTime = time.monotonic()
+    passedTime = time.monotonic()
     global currentDestination
 
     while currentDestination == "":
@@ -254,14 +300,16 @@ def state_2():
         """
     textArea.text =  currentDestination + "\nAttend PWR ON"
 
+    if passedTime + 5 < time.monotonic():
+        defineTempHum()
+        passedTime = time.monotonic()
+
     while True:
-        
         if pwrButton.value :
             return state_3()
 
 def state_3():
 
-    #Empêche le plantage vu non déclaré ???
     textArea.scale = 1
     enableMotor.value = True
     pixelLed.fill(COLORS['green'])
@@ -320,41 +368,20 @@ def state_3():
             joystickAngle = degrees(atan2(axisYVal, axisXVal) + MAX_DEGREES) % MAX_DEGREES
 
             #Zone neutre
-            if (axisXVal < 0.26 and axisXVal > 0.24) and (axisYVal < 0.13 and axisYVal > 0.11):
+            if (axisXVal < 0.26 and axisXVal > 0.24) and (axisYVal < 0.14 and axisYVal > 0.11):
                 joystickAngle = -1
 
-            if joystickAngle == -1:
-                ledIndex = -1
-            elif joystickAngle > ANGLE_RANGE[0] and joystickAngle < ANGLE_RANGE[1]:
-                ledIndex = 0
-            elif joystickAngle < ANGLE_RANGE[2]:
-                ledIndex = 1
-            elif joystickAngle < ANGLE_RANGE[3]:
-                ledIndex = 2
-            elif joystickAngle < ANGLE_RANGE[4]:
-                ledIndex = 3
-            elif joystickAngle < ANGLE_RANGE[5]:
-                ledIndex = 4
-            elif joystickAngle < ANGLE_RANGE[6]:
-                ledIndex = 5
-            elif joystickAngle < ANGLE_RANGE[7]:
-                ledIndex = 6
-            else :
-                ledIndex = 7
+            ledIndex = selectLedRingIndex(joystickAngle)
 
-            #ledBoard.fill(COLORS['off'])
+            ledBoard.fill(COLORS['off'])
             if ledIndex != -1:
-                #ledBoard[ledIndex] = COLORS['white']
-                "temp, enlève moi"
+                ledBoard[ledIndex] = COLORS['white']
 
         #Empèche le plantage du esp si spike de courant pour DHT
         try :
             tempCelcius = dht.temperature
             humidity = dht.humidity
             motorPower = motor.throttle * 100
-
-
-        
 
         except RuntimeError as error:
             print(error.args[0])
@@ -365,16 +392,11 @@ def state_3():
             lcdPassedTime = time.monotonic()
 
         if passedTime + 5 < time.monotonic():
-            ## send data to api
-            json_data = {
-                "field1": tempCelcius,
-                "field2": humidity,
-            }
-            response = https.post(os.getenv("APIPOST"), json = json_data)
+            sendData(tempCelcius, humidity)
             passedTime = time.monotonic()
 
 
-
+    currentDestination = ""
     return state_1()
 
 def main():
