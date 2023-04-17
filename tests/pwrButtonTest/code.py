@@ -1,18 +1,23 @@
 import digitalio
 import busio
-import adafruit_aw9523
+import adafruit_tca8418
 import time
 import board
 
 ### Expension Board ### À CHANGER LORSQUE NOUVEAU BOARD REÇU
 
 i2c = busio.I2C(board.SCL, board.SDA)  # uses board.SCL and board.SDA
-aw9523 = adafruit_aw9523.AW9523(i2c)
+tca = adafruit_tca8418.TCA8418(i2c)
 
 ### PWR Button ###
-pwrButton = aw9523.get_pin(0)
-pwrButton.direction = digitalio.Direction.INPUT
+#tca.gpio_mode[TCA8418.R7] = True
+#tca.gpio_direction[TCA8418.R7] = False
+#tca.pullup[TCA8418.R7] = True
+
+pwr = adafruit_tca8418.DigitalInOut(6, tca)
+pwr.direction = digitalio.Direction.INPUT
+
 
 while True:
-    print(pwrButton.value)
+    print(pwr.value)
     time.sleep(1)

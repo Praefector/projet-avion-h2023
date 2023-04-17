@@ -14,13 +14,12 @@ import terminalio
 import analogio
 import digitalio
 import busio
-import adafruit_aw9523
 from math import atan2
 from math import degrees
 from adafruit_motor import servo
 from adafruit_motor import motor
 from adafruit_display_text import bitmap_label
-from adafruit_tca8418 import TCA8418
+import adafruit_tca8418
 from displayio import Group
 
 ######## STARTING STATE #########
@@ -28,8 +27,7 @@ from displayio import Group
 ### Expension Board ### À CHANGER LORSQUE NOUVEAU BOARD REÇU
 
 i2c = busio.I2C(board.SCL, board.SDA)  # uses board.SCL and board.SDA
-aw9523 = adafruit_aw9523.AW9523(i2c)
-#tca = TCA8418(i2c)
+tca = adafruit_tca8418.TCA8418(i2c)
 
 ### General attributes ###
 currentDestination = ""
@@ -47,10 +45,10 @@ MAX_DEGREES = 360
 COLORS = {'red':(255, 0, 0), 'yellow':(255, 255, 0), 'green':(0, 255, 0), 'white':(255, 255, 255), 'off':(0, 0, 0)}
 ANGLE_RANGE = (0, 45, 90 , 135, 180, 225, 270, 315, 360)
 
-KEYPAD = ((1, 2, 3, "A"),
-            (4, 5, 6, "B"),
-            (7, 8, 9, "C"),
-            ('*', 0, '#', "D"))
+KEYPAD = (("*", "0", "#", "D"), 
+          ("7", "8", "9", "C"), 
+          ("4", "5", "6", "B"), 
+          ("1", "2", "3", "A"))
 
 AIRPORTS = {
     "101" : "YUL Montreal",
@@ -64,23 +62,23 @@ AIRPORTS = {
 
 ### Keypad ###
 PINS_TCA = (
-    TCA8418.R0,
-    TCA8418.R1,
-    TCA8418.R2,
-    TCA8418.R3,
-    TCA8418.C0,
-    TCA8418.C1,
-    TCA8418.C2,
-    TCA8418.C3,
+    adafruit_tca8418.TCA8418.R0,
+    adafruit_tca8418.TCA8418.R1,
+    adafruit_tca8418.TCA8418.R2,
+    adafruit_tca8418.TCA8418.R3,
+    adafruit_tca8418.TCA8418.C0,
+    adafruit_tca8418.TCA8418.C1,
+    adafruit_tca8418.TCA8418.C2,
+    adafruit_tca8418.TCA8418.C3,
 )
-"""
+
 for pin in PINS_TCA:
     tca.keypad_mode[pin] = True
     tca.enable_int[pin] = True
     tca.event_mode_fifo[pin] = True
 
 tca.key_intenable = True
-"""
+
 
 ### Time ###
 passedTime = time.monotonic()
@@ -89,7 +87,7 @@ lcdPassedTime = time.monotonic()
 ### Joystick ###
 joystickAxisX = analogio.AnalogIn(board.A0)
 joystickAxisY = analogio.AnalogIn(board.A1)
-joystickButton = digitalio.DigitalInOut(board.A2)
+joystickButton = adafruit_tca8418.DigitalInOut(7, tca)
 joystickButton.switch_to_input(pull=digitalio.Pull.UP)
 
 ### Screen ###
@@ -120,7 +118,7 @@ motor = motor.DCMotor(motorPWMPositive, motorPWMNegative)
 motor.throttle = 0
 
 ### Sonar ###
-#distanceSonar = adafruit_hcsr04.HCSR04(trigger_pin=board.D9, echo_pin=board.D6)
+distanceSonar = adafruit_hcsr04.HCSR04(trigger_pin=board.D9, echo_pin=board.D6)
 
 ### PixelLed Module ###
 pixelLed = neopixel.NeoPixel(board.NEOPIXEL, 1)
@@ -134,7 +132,7 @@ ledBoard.fill(COLORS['off'])
 
 
 ### PWR Button ###
-pwrButton = aw9523.get_pin(0)
+pwrButton = adafruit_tca8418.DigitalInOut(6, tca)
 pwrButton.direction = digitalio.Direction.INPUT
 
 ### RFID ###
@@ -238,7 +236,7 @@ def state_2():
             lcdPassedTime = time.monotonic()
         
         ### DEBUG ### PERMET DE SIMULER UN CLAVIER
-
+        """
         charInput = input()
 
         if charInput == "#" and len(keypadString) == 3:
@@ -265,8 +263,8 @@ def state_2():
             time.sleep(2)
 
         keypadString += charInput
-
         """
+
         if tca.key_int:
             events = tca.events_count
 
@@ -275,29 +273,31 @@ def state_2():
                 #  strip keyevent
                 event = keyevent & 0x7F
                 event -= 1
-                row = event // 16
-                col = event % 16
+                row = event // 10
+                col = event % 10
 
+                if keyevent & 0x80:
+                    if KEYPAD[col][row] == "#" and len(keypadString) == 3:
+                        if keypadString in AIRPORTS :
+                            currentDestination = AIRPORTS[keypadString]
 
-                if KEYPAD[col][row] == "#" and len(keypadString) == 3:
-                    if keypadString in AIRPORTS :
-                        currentDestination = AIRPORTS[keypadString]
+                    elif KEYPAD[col][row] == "#" and len(keypadString) == 0:
+                        return state_1()
 
-                elif KEYPAD[col][row] == "#" and len(keypadString) == 0:
-                    return state_1()
+                    elif KEYPAD[col][row] == "#" and len(keypadString) != 3:
+                        textArea.text = "Veuillez entrer un code valide !"
+                        keypadString = ""
+                        time.sleep(2)
 
-                elif KEYPAD[col][row] == "#" and len(keypadString) != 3:
-                    textArea.text = "Veuillez entrer un code valide !"
-                    time.sleep(2)
+                    elif len(keypadString) > 3:
+                        textArea.text = "Veuillez entrer un code \n valide de 3 caractères !"
+                        keypadString = ""
+                        time.sleep(2)
+                    else:
+                        keypadString += KEYPAD[col][row]
 
-                elif len(keypadString) > 3:
-                    textArea.text = "Veuillez entrer un code \n valide de 3 caractères !"
-                    keypadString = ""
-                    time.sleep(2)
-                    
-                keypadString += KEYPAD[col][row]
             tca.key_int = True  
-        """
+        
     textArea.text =  currentDestination + "\nAttend PWR ON"
 
     if passedTime + 5 < time.monotonic():
@@ -324,6 +324,9 @@ def state_3():
     global currentDestination
 
     while pwrButton.value :
+
+        if distanceSonar.distance < 10:
+            return state_1()
 
         if not joystickButton.value :
             if isFlightSettingsLocked :
@@ -388,7 +391,7 @@ def state_3():
             continue
     
         if lcdPassedTime + 0.1 < time.monotonic():
-            textArea.text = "Puissance moteur : " + str(int(motorPower)) + " %\n" + "Angle aileron : " + str(int(finAngle)) + " deg\n" + "Destination : " + str(currentDestination) + "\n" + "Température : " + str(tempCelcius) + " C\n" + "Humidité : " + str(humidity) + " %\n" + "Autopilote : " + str(isFlightSettingsLocked)
+            textArea.text = "Puissance moteur : " + str(int(motorPower)) + " %\n" + "Angle aileron : " + str(int(finAngle)) + " deg\n" + "Destination : " + str(currentDestination) + "\n" + "Température : " + str(tempCelcius) + " C\n" + "Humidité : " + str(humidity) + " %\n" + "Autopilote : " + str(isFlightSettingsLocked) +  " %\n" + "Distance : " + str(distanceSonar.distance)
             lcdPassedTime = time.monotonic()
 
         if passedTime + 5 < time.monotonic():
