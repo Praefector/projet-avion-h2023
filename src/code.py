@@ -126,7 +126,7 @@ pixelLed.brightness = 1
 
 ### LED Ring
 
-ledBoard = neopixel.NeoPixel(board.D6, 8)
+ledBoard = neopixel.NeoPixel(board.A2, 8)
 ledBoard.brightness = 0.1
 ledBoard.fill(COLORS['off'])
 
@@ -217,7 +217,7 @@ def state_1():
             defineTempHum()
             passedTime = time.monotonic()
 
-    return state_2()
+    return "state_2"
 
 
 
@@ -231,7 +231,7 @@ def state_2():
     global currentDestination
 
     while currentDestination == "":
-        if lcdPassedTime + 0.1 < time.monotonic():
+        if lcdPassedTime + 0.5 < time.monotonic():
             textArea.text =  "Entrez code\ndestination \n" + keypadString
             lcdPassedTime = time.monotonic()
         
@@ -280,17 +280,21 @@ def state_2():
                     if KEYPAD[col][row] == "#" and len(keypadString) == 3:
                         if keypadString in AIRPORTS :
                             currentDestination = AIRPORTS[keypadString]
+                        else :
+                            textArea.text = "Veuillez entrer\nun code valide !"
+                            keypadString = ""
+                            time.sleep(2)
 
                     elif KEYPAD[col][row] == "#" and len(keypadString) == 0:
-                        return state_1()
+                        return "state_3"
 
                     elif KEYPAD[col][row] == "#" and len(keypadString) != 3:
-                        textArea.text = "Veuillez entrer un code valide !"
+                        textArea.text = "Veuillez entrer\nun code valide !"
                         keypadString = ""
                         time.sleep(2)
 
-                    elif len(keypadString) > 3:
-                        textArea.text = "Veuillez entrer un code \n valide de 3 caractères !"
+                    elif len(keypadString) >= 3:
+                        textArea.text = "Veuillez entrer\nun code valide\nde 3 caractères !"
                         keypadString = ""
                         time.sleep(2)
                     else:
@@ -306,7 +310,7 @@ def state_2():
 
     while True:
         if pwrButton.value :
-            return state_3()
+            return "state_3"
 
 def state_3():
 
@@ -321,12 +325,10 @@ def state_3():
     lcdPassedTime = time.monotonic()
     passedTime = time.monotonic()
     ledIndex = 0
+    distance = 0
     global currentDestination
 
     while pwrButton.value :
-
-        if distanceSonar.distance < 10:
-            return state_1()
 
         if not joystickButton.value :
             if isFlightSettingsLocked :
@@ -389,26 +391,47 @@ def state_3():
         except RuntimeError as error:
             print(error.args[0])
             continue
-    
+
         if lcdPassedTime + 0.1 < time.monotonic():
-            textArea.text = "Puissance moteur : " + str(int(motorPower)) + " %\n" + "Angle aileron : " + str(int(finAngle)) + " deg\n" + "Destination : " + str(currentDestination) + "\n" + "Température : " + str(tempCelcius) + " C\n" + "Humidité : " + str(humidity) + " %\n" + "Autopilote : " + str(isFlightSettingsLocked) +  " %\n" + "Distance : " + str(distanceSonar.distance)
+            textArea.text = "Puissance moteur : " + str(int(motorPower)) + " %\n" + "Angle aileron : " + str(int(finAngle)) + " deg\n" + "Destination : " + str(currentDestination) + "\n" + "Température : " + str(tempCelcius) + " C\n" + "Humidité : " + str(humidity) + " %\n" + "Autopilote : " + str(isFlightSettingsLocked) +  " %\n" + "Distance : " + str(distance)
             lcdPassedTime = time.monotonic()
 
         if passedTime + 5 < time.monotonic():
             sendData(tempCelcius, humidity)
             passedTime = time.monotonic()
 
+        try:
+            distance = distanceSonar.distance
+            if distance < 10 :
+                currentDestination = ""
+                return "state_1"
+
+        except RuntimeError as error:
+            print(error.args[0])
+            distance = "Undetected"
+            continue
+
 
     currentDestination = ""
-    return state_1()
+    return "state_1"
 
 def main():
 
-    while True:
-        current_state = state_1()
+    current_state = state_1()
 
+    while True:
+        
         # Sortie de la boucle si l'état final est atteint
         if current_state == None:
             break
+
+        elif current_state == "state_1":
+            current_state = state_1()
+
+        elif current_state == "state_2":
+            current_state = state_2()
+
+        elif current_state == "state_3":
+            current_state = state_3()
 
 main()
