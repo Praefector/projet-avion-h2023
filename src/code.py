@@ -42,6 +42,18 @@ MIN_JOYSTICK_VAL = 380
 
 MAX_DEGREES = 360
 
+MIN_ANGLE_VAL = 0
+REG_ANGLE_VAL = 90
+MAX_ANGLE_VAL = 180
+
+ONE_MS = 0.1
+FIVE_MS = 0.5
+FIVE_SEC = 5
+
+SHUTDOWN_DISTANCE = 10
+
+FIND_ACTIVE_QUADRANT = 0.5
+
 COLORS = {'red':(255, 0, 0), 'yellow':(255, 255, 0), 'green':(0, 255, 0), 'white':(255, 255, 255), 'off':(0, 0, 0)}
 ANGLE_RANGE = (0, 45, 90 , 135, 180, 225, 270, 315, 360)
 
@@ -151,7 +163,6 @@ socket = socketpool.SocketPool(wifi.radio)
 context = ssl.create_default_context()
 https = adafruit_requests.Session(socket,context)
 
-
 ### FUNCTIONS ####
 
 def selectLedRingIndex(joystickAngle):
@@ -181,13 +192,14 @@ def sendData(tC, hum):
         "field1": tC,
         "field2": hum,
     }
-    response = https.post(os.getenv("APIPOST"), json = json_data)
+    https.post(os.getenv("APIPOST"), json = json_data)
+    print("send complete")
 
 def defineTempHum():
-
     tempC = dht.temperature
     hum = dht.humidity
     sendData(tempC, hum)
+    
 
 
 def state_1():
@@ -195,7 +207,7 @@ def state_1():
     textArea.scale = 2
     #position attente
     enableMotor.value = False
-    fin.angle = 90
+    fin.angle = REG_ANGLE_VAL
     textArea.text = "Scannez carte"
     cardUid = ""
     passedTime = time.monotonic()
@@ -213,7 +225,7 @@ def state_1():
             print(cardUid)
             """
 
-        if passedTime + 5 < time.monotonic():
+        if passedTime + FIVE_SEC < time.monotonic():
             defineTempHum()
             passedTime = time.monotonic()
 
@@ -231,7 +243,7 @@ def state_2():
     global currentDestination
 
     while currentDestination == "":
-        if lcdPassedTime + 0.5 < time.monotonic():
+        if lcdPassedTime + FIVE_MS < time.monotonic():
             textArea.text =  "Entrez code\ndestination \n" + keypadString
             lcdPassedTime = time.monotonic()
         
@@ -286,7 +298,7 @@ def state_2():
                             time.sleep(2)
 
                     elif KEYPAD[col][row] == "#" and len(keypadString) == 0:
-                        return "state_3"
+                        return "state_1"
 
                     elif KEYPAD[col][row] == "#" and len(keypadString) != 3:
                         textArea.text = "Veuillez entrer\nun code valide !"
@@ -319,7 +331,7 @@ def state_3():
     pixelLed.fill(COLORS['green'])
     isFlightSettingsLocked = False
     motor.throttle = 0
-    fin.angle = 90
+    fin.angle = REG_ANGLE_VAL
     tempCelcius = 0
     humidity = 0
     lcdPassedTime = time.monotonic()
@@ -341,7 +353,7 @@ def state_3():
             motorValue8bit = (joystickAxisY.value - MIN_JOYSTICK_VAL) * MAX_8BIT / MAX_JOYSTICK_VAL
             trueMotorVal = (motorValue8bit * 2.00 / MAX_8BIT) - 1.00
             #pour compenser la calibration ignoble du joystick ig
-            if(trueMotorVal < 0.6 and trueMotorVal > -0.1):
+            if(trueMotorVal < 0.28 and trueMotorVal > 0):
                 trueMotorVal = 0
 
             #Empêche erreurs
@@ -357,19 +369,19 @@ def state_3():
             #pour compenser la calibration ignoble du joystick ig
             if(finValue8bit < 195 and finValue8bit > 128):
                 finValue8bit = 128
-            finAngle = finValue8bit * 180 / MAX_8BIT
+            finAngle = finValue8bit * MAX_ANGLE_VAL / MAX_8BIT
 
             #Empêche erreurs
-            if finAngle < 0:
-                fin.angle = 0
-            elif finAngle > 180:
-                fin.angle = 180
+            if finAngle < MIN_ANGLE_VAL:
+                fin.angle = MIN_ANGLE_VAL
+            elif finAngle > MAX_ANGLE_VAL:
+                fin.angle = MAX_ANGLE_VAL
             else :
                 fin.angle = finAngle
 
             #Indication position joystick avec ledBoard
-            axisYVal = ((joystickAxisY.value - MIN_JOYSTICK_VAL) / MAX_JOYSTICK_VAL) - 0.5
-            axisXVal = ((joystickAxisX.value - MIN_JOYSTICK_VAL) / MAX_JOYSTICK_VAL) - 0.5
+            axisYVal = ((joystickAxisY.value - MIN_JOYSTICK_VAL) / MAX_JOYSTICK_VAL) - FIND_ACTIVE_QUADRANT
+            axisXVal = ((joystickAxisX.value - MIN_JOYSTICK_VAL) / MAX_JOYSTICK_VAL) - FIND_ACTIVE_QUADRANT
             joystickAngle = degrees(atan2(axisYVal, axisXVal) + MAX_DEGREES) % MAX_DEGREES
 
             #Zone neutre
@@ -392,18 +404,19 @@ def state_3():
             print(error.args[0])
             continue
 
-        if lcdPassedTime + 0.1 < time.monotonic():
-            textArea.text = "Puissance moteur : " + str(int(motorPower)) + " %\n" + "Angle aileron : " + str(int(finAngle)) + " deg\n" + "Destination : " + str(currentDestination) + "\n" + "Température : " + str(tempCelcius) + " C\n" + "Humidité : " + str(humidity) + " %\n" + "Autopilote : " + str(isFlightSettingsLocked) +  " %\n" + "Distance : " + str(distance)
+        if lcdPassedTime + ONE_MS < time.monotonic():
+            textArea.text = "Puissance moteur : " + str(int(motorPower)) + " %\n" + "Angle aileron : " + str(int(finAngle)) + " deg\n" + "Destination : " + str(currentDestination) + "\n" + "Température : " + str(tempCelcius) + " C\n" + "Humidité : " + str(humidity) + " %\n" + "Autopilote : " + str(isFlightSettingsLocked) +  " \n" + "Distance : " + str(distance) + " cm"
             lcdPassedTime = time.monotonic()
 
-        if passedTime + 5 < time.monotonic():
+        if passedTime + FIVE_SEC < time.monotonic():
             sendData(tempCelcius, humidity)
             passedTime = time.monotonic()
 
         try:
             distance = distanceSonar.distance
-            if distance < 10 :
+            if distance < SHUTDOWN_DISTANCE :
                 currentDestination = ""
+                ledBoard.fill(COLORS['off'])
                 return "state_1"
 
         except RuntimeError as error:
@@ -411,7 +424,7 @@ def state_3():
             distance = "Undetected"
             continue
 
-
+    ledBoard.fill(COLORS['off'])
     currentDestination = ""
     return "state_1"
 
@@ -421,7 +434,7 @@ def main():
 
     while True:
         
-        # Sortie de la boucle si l'état final est atteint
+
         if current_state == None:
             break
 
